@@ -76,3 +76,4 @@ appsettings.Production.json
 
 # Scripts with secrets
 scripts/setup-azure-auto.sh
+
