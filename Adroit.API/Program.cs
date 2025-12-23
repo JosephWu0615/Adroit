@@ -90,33 +90,39 @@ if (!useInMemory)
 }
 
 // Configure the HTTP request pipeline
-if (app.Environment.IsDevelopment())
+app.UseSwagger();
+app.UseSwaggerUI(c =>
 {
-    app.UseSwagger();
-    app.UseSwaggerUI(c =>
-    {
-        c.SwaggerEndpoint("/swagger/v1/swagger.json", "Adroit API V1");
-        c.RoutePrefix = "swagger";
-    });
-}
+    c.SwaggerEndpoint("/swagger/v1/swagger.json", "Adroit API V1");
+    c.RoutePrefix = "swagger";
+});
 
 app.UseHttpsRedirection();
 app.UseCors("AllowReactApp");
 
-// Serve static files (React frontend)
-app.UseDefaultFiles();
-app.UseStaticFiles();
-
+app.UseRouting();
 app.UseAuthorization();
 
-// Map controllers
+// Map controllers FIRST (includes redirect endpoint)
 app.MapControllers();
 
 // Map health check endpoint
 app.MapHealthChecks("/health");
 
-// SPA fallback - serve index.html for non-API routes
-app.MapFallbackToFile("index.html");
+// Serve static files (React frontend) - AFTER controllers
+app.UseStaticFiles();
+
+// SPA fallback - only for paths that don't match controllers or static files
+app.MapFallback(async context =>
+{
+    // Don't serve index.html for API routes or short codes that returned 404
+    var path = context.Request.Path.Value ?? "";
+    if (!path.StartsWith("/api/") && !path.StartsWith("/swagger") && !path.StartsWith("/health"))
+    {
+        context.Response.ContentType = "text/html";
+        await context.Response.SendFileAsync(Path.Combine(app.Environment.WebRootPath, "index.html"));
+    }
+});
 
 // Log startup information
 app.Logger.LogInformation("Adroit URL Shortener API started");
