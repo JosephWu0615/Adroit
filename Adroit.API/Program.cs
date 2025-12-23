@@ -100,29 +100,56 @@ app.UseSwaggerUI(c =>
 app.UseHttpsRedirection();
 app.UseCors("AllowReactApp");
 
+// Short URL redirect middleware - runs BEFORE static files and routing
+app.Use(async (context, next) =>
+{
+    var path = context.Request.Path.Value?.TrimStart('/') ?? "";
+
+    // Skip reserved paths
+    if (string.IsNullOrEmpty(path) ||
+        path.StartsWith("api", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("swagger", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("health", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("static", StringComparison.OrdinalIgnoreCase) ||
+        path.Contains('.') ||
+        path.Contains('/'))
+    {
+        await next();
+        return;
+    }
+
+    // Try to resolve as short code
+    var urlService = context.RequestServices.GetService<IUrlService>();
+    if (urlService != null)
+    {
+        var longUrl = await urlService.GetLongUrlAsync(path);
+        if (longUrl != null)
+        {
+            // Record click
+            _ = Task.Run(async () => await urlService.RecordClickAsync(path));
+            context.Response.Redirect(longUrl, permanent: false);
+            return;
+        }
+    }
+
+    await next();
+});
+
 app.UseRouting();
 app.UseAuthorization();
 
-// Map controllers FIRST (includes redirect endpoint)
+// Serve static files (React frontend)
+app.UseDefaultFiles();
+app.UseStaticFiles();
+
+// Map controllers
 app.MapControllers();
 
 // Map health check endpoint
 app.MapHealthChecks("/health");
 
-// Serve static files (React frontend) - AFTER controllers
-app.UseStaticFiles();
-
-// SPA fallback - only for paths that don't match controllers or static files
-app.MapFallback(async context =>
-{
-    // Don't serve index.html for API routes or short codes that returned 404
-    var path = context.Request.Path.Value ?? "";
-    if (!path.StartsWith("/api/") && !path.StartsWith("/swagger") && !path.StartsWith("/health"))
-    {
-        context.Response.ContentType = "text/html";
-        await context.Response.SendFileAsync(Path.Combine(app.Environment.WebRootPath, "index.html"));
-    }
-});
+// SPA fallback
+app.MapFallbackToFile("index.html");
 
 // Log startup information
 app.Logger.LogInformation("Adroit URL Shortener API started");
