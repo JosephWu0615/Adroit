@@ -1,0 +1,135 @@
+name: Build and Deploy to Azure
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+env:
+  DOTNET_VERSION: '8.0.x'
+  NODE_VERSION: '18.x'
+  AZURE_WEBAPP_NAME: 'adroit-api'
+  AZURE_WEBAPP_RESOURCE_GROUP: 'cloud-shell-storage-westus'
+  AZURE_WEBAPP_PACKAGE_PATH: './publish'
+
+jobs:
+  # =============================================================================
+  # Build and Test Backend
+  # =============================================================================
+  build-backend:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+
+    - name: Restore dependencies
+      run: dotnet restore
+
+    - name: Build
+      run: dotnet build --configuration Release --no-restore
+
+    - name: Run tests
+      run: dotnet test --configuration Release --no-build --verbosity normal
+
+    - name: Publish
+      run: dotnet publish Adroit.API/Adroit.API.csproj -c Release -o ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}
+
+    - name: Upload artifact for deployment
+      uses: actions/upload-artifact@v4
+      with:
+        name: backend-artifact
+        path: ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}
+
+  # =============================================================================
+  # Build Frontend
+  # =============================================================================
+  build-frontend:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+        cache-dependency-path: Adroit.Web/package-lock.json
+
+    - name: Install dependencies
+      working-directory: ./Adroit.Web
+      run: npm ci
+
+    - name: Build
+      working-directory: ./Adroit.Web
+      run: npm run build
+      env:
+        REACT_APP_API_URL: https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net
+
+    - name: Upload artifact for deployment
+      uses: actions/upload-artifact@v4
+      with:
+        name: frontend-artifact
+        path: Adroit.Web/build
+
+  # =============================================================================
+  # Deploy Backend to Azure App Service
+  # =============================================================================
+  deploy-backend:
+    runs-on: ubuntu-latest
+    needs: [build-backend, build-frontend]
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+
+    environment:
+      name: 'production'
+      url: https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net
+
+    steps:
+    - name: Download artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: backend-artifact
+        path: ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}
+
+    - name: Deploy to Azure Web App
+      uses: azure/webapps-deploy@v3
+      with:
+        app-name: ${{ env.AZURE_WEBAPP_NAME }}
+        publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+        package: ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}
+
+  # =============================================================================
+  # Deploy Frontend to Azure Static Web Apps
+  # =============================================================================
+  deploy-frontend:
+    runs-on: ubuntu-latest
+    needs: [build-backend, build-frontend]
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+
+    environment:
+      name: 'production-frontend'
+
+    steps:
+    - name: Download artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: frontend-artifact
+        path: ./frontend-build
+
+    - name: Deploy to Azure Static Web Apps
+      uses: Azure/static-web-apps-deploy@v1
+      with:
+        azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+        repo_token: ${{ secrets.GITHUB_TOKEN }}
+        action: 'upload'
+        app_location: './frontend-build'
+        skip_app_build: true

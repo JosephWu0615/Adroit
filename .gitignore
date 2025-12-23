@@ -1,0 +1,78 @@
+# .NET
+bin/
+obj/
+*.user
+*.userosscache
+*.suo
+*.userprefs
+.vs/
+*.cache
+project.lock.json
+.vscode/
+
+# Build results
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+build/
+bld/
+[Bb]in/
+[Oo]bj/
+
+# NuGet
+*.nupkg
+.nuget/
+packages/
+
+# IDE
+.idea/
+*.sln.docstates
+*.swp
+*~
+
+# Rider
+.idea/
+
+# User-specific files
+*.rsuser
+*.suo
+*.user
+*.sln.docstates
+
+# Mono Auto Generated Files
+mono_crash.*
+
+# React / Node
+node_modules/
+Adroit.Web/node_modules/
+Adroit.Web/build/
+Adroit.Web/.env
+Adroit.Web/.env.local
+Adroit.Web/.env.development.local
+Adroit.Web/.env.test.local
+Adroit.Web/.env.production.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Logs
+logs/
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+ehthumbs.db
+
+# Test results
+TestResults/
+*.trx
+
+# Azure deployment secrets - NEVER commit these
+publish-profile.xml
+*.PublishSettings
+appsettings.Production.json
+
+# Scripts with secrets
+scripts/setup-azure-auto.sh
