@@ -125,8 +125,14 @@ app.Use(async (context, next) =>
         var longUrl = await urlService.GetLongUrlAsync(path);
         if (longUrl != null)
         {
-            // Record click
-            _ = Task.Run(async () => await urlService.RecordClickAsync(path));
+            // Record click in background with new scope (DbContext is scoped)
+            var serviceScopeFactory = context.RequestServices.GetRequiredService<IServiceScopeFactory>();
+            _ = Task.Run(async () =>
+            {
+                using var scope = serviceScopeFactory.CreateScope();
+                var scopedUrlService = scope.ServiceProvider.GetRequiredService<IUrlService>();
+                await scopedUrlService.RecordClickAsync(path);
+            });
             context.Response.Redirect(longUrl, permanent: false);
             return;
         }
